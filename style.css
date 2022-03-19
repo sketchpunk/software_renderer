@@ -1,0 +1,6 @@
+canvas { border:4px double #505050; }
+html, body{ margin:0px; padding:0px; width:100%; height:100%; }
+body{ background-color: #1E1E1E; 
+    display:flex; flex-direction:column; 
+    align-items:center; justify-content: center;
+}

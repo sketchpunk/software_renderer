@@ -1,0 +1,248 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lesson 1: Bresenham's Line Drawing Algorithm</title></head><body>
+<link rel="stylesheet" href="./style.css"/>  
+<script type="module">
+    import ObjParser    from './lib/ObjParser.js';
+    import Canvas       from './lib/Canvas.js';
+
+    window.addEventListener( 'load', async _=>{
+        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        const obj = new ObjParser();
+        await obj.fetch( './assets/african_head.txt' );
+        obj.load();
+        console.log( obj.computeBounding() ); // Get an idea of where the mesh lives in model space
+
+        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        const c = new Canvas();
+        c   .appendTo( document.body )
+            .setSize( 500, 500 )
+            .initPixel();
+
+        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        const r = new Renderer( c );
+
+        let f, i, ii, a, b;
+        let x0, y0, x1, y1;
+        let wh = c.width / 2;   // Width Half
+        let hh = c.height / 2;  // Height Half
+
+        // Define Origin - Center of Image
+        const ox = Math.floor( wh );
+        const oy = Math.floor( hh );
+
+        for( f of obj.faces ){
+            // Loop all the edges of the face & draw a line
+            for( i=0; i < f.length; i++ ){
+                ii = ( i + 1 ) % f.length;  // Loop back to the first point when at the last point
+                
+                a  = obj.verts[ f[i] ];     // Edge Start
+                b  = obj.verts[ f[ii] ];    // Edge End
+
+                // Only Need XY. The bounding around for the model is within -1 : 1 range on all axis
+                // So using the center of the canvas, we can compute the vertices within the bounding
+                // area of the canvas, very much like how webgl goes from device space coordinates
+                // to screen space coordinates... But we're doing it from SCRATCH, tis fun :)
+
+                // Need to floor all the values, can't use FLOATs as pixel coordinates, has to be whole ints.
+                // The tutorial was able to draw lines with its origin at the BOTTOM-LEFT with Positive directions
+                // goin Left & Up but HTML canvas when dealing with RAW PIXELS has origin is that is TOP-LEFT with
+                // positive directions going LEFT & Down. This means rendering the mesh as is will cause it to be
+                // upside down. Simple solution is to invert the Y & placing it in relation to the center of the
+                // canvas space allows me to render it correctly right side up.
+                x0 = ox + Math.floor(  a[0] * wh );
+                y0 = oy + Math.floor( -a[1] * hh ); // Invert Y
+                x1 = ox + Math.floor(  b[0] * wh );
+                y1 = oy + Math.floor( -b[1] * hh ); // Invert Y
+
+                r.line( x0, y0, x1, y1, 0x00ffff );
+            }
+        }
+
+        r.render();
+    });
+
+
+    
+
+    class Renderer{
+        constructor( canvas ){
+            this.canvas = canvas;
+        }
+
+        // https://github.com/ssloy/tinyrenderer/wiki/Lesson-1:-Bresenham%E2%80%99s-Line-Drawing-Algorithm
+        // Various Attempts from the tutorial
+        line_a1( x0, y0, x1, y1, color ){ 
+            let x = 0;
+            let y = 0;
+            let t, ti;
+            
+            for( t = 0; t < 1; t += 0.1 ){
+                ti  = 1 - t;
+                x   = Math.floor( x0 * ti + x1 * t );
+                y   = Math.floor( y0 * ti + y1 * t );
+                this.canvas.setPixel( x, y, color );
+            }
+            return this;
+        }
+        
+        line_a2( x0, y0, x1, y1, color ){ 
+            let x = 0;
+            let y = 0;
+            let t, ti;
+            
+            for( x = x0; x <= x1; x++ ){
+                t = ( x - x0 ) / ( x1 - x0 );
+                y = Math.floor( y0 * (1-t) + y1 * t );
+                //console.log( color, x, y );
+                this.canvas.setPixel( x, y, color );
+            }
+            return this;
+        }
+        
+        line_a3( x0, y0, x1, y1, color ){ 
+            let x = 0;
+            let y = 0;
+            let t, ti;
+        
+            // If the line is steep, transpose the image.. not sure what this means.
+            let steep = false;
+            if( Math.abs( x0-x1 ) < Math.abs( y0-y1 ) ){
+                // Swop X & Y of each point
+                [ x0, y0 ] = [ y0, x0 ];
+                [ x1, y1 ] = [ y1, x1 ];
+                steep = true;
+            }
+            
+            // Make the Line draw from left to Right
+            if( x0 > x1 ){
+                [ x0, x1 ] = [ x1, x0 ];
+                [ y0, y1 ] = [ y1, y0 ];
+            }
+
+            for( x = x0; x <= x1; x++ ){
+                t = ( x - x0 ) / ( x1 - x0 );
+                y = Math.floor( y0 * (1-t) + y1 * t );
+                if( steep ) this.canvas.setPixel( y, x, color ); // de-transpose the cordinate
+                else        this.canvas.setPixel( x, y, color );
+            }
+
+            return this;
+        }
+
+        line_a4( x0, y0, x1, y1, color ){ 
+            let x = 0;
+            let y = 0;
+            let t, ti;
+
+            // If the line is steep, transpose the image.. not sure what this means.
+            // VoR Notes : Swapping X,Y can be a quick way to do a 90 degree rotation
+            // Drawing things out in a graph, if the line is very vertical, rotating it
+            // by 90 makes it more horizontal. This makes sense since we're trying to draw
+            // from left to right on the x axis. So if the line is mostly on the x axis
+            // it should draw better without gaps being created.
+            let steep = false;
+            if( Math.abs( x0-x1 ) < Math.abs( y0-y1 ) ){
+                // Swop X & Y of each point
+                [ x0, y0 ] = [ y0, x0 ];
+                [ x1, y1 ] = [ y1, x1 ];
+                steep = true;
+            }
+            
+            // Make the Line draw from left to Right
+            if( x0 > x1 ){
+                [ x0, x1 ] = [ x1, x0 ];
+                [ y0, y1 ] = [ y1, y0 ];
+            }
+
+            const dx    = x1 - x0;
+            const dy    = y1 - y0;
+            const dErr  = dy / dx; // Ratio? How much x is needed to move to the next Y?
+            let   err   = 0;
+
+            y = y0;
+            for( x = x0; x <= x1; x++ ){
+                if( steep ) this.canvas.setPixel( y, x, color ); // de-transpose the cordinate
+                else        this.canvas.setPixel( x, y, color );
+
+                //console.log( 'y', y, 'err', err );
+                // Have we moved far enough on the X axis to justify
+                // moving up one pixel in the y direction?
+                // Debugging the code means we'll end up drawing several times
+                // at the same Y position for a few x positions.
+                err += dErr;
+                if( err > 0.5 ){
+                    y += y1 > y0? 1:-1;
+                    err -= 1;
+                }
+            }
+            return this;
+        }
+
+        line( x0, y0, x1, y1, color ){ 
+            let x = 0;
+            let y = 0;
+            let t, ti;
+
+            // If the line is steep, transpose the image.. not sure what this means.
+            // VoR Notes : Swapping X,Y can be a quick way to do a 90 degree rotation
+            // Drawing things out in a graph, if the line is very vertical, rotating it
+            // by 90 makes it more horizontal. This makes sense since we're trying to draw
+            // from left to right on the x axis. So if the line is mostly on the x axis
+            // it should draw better without gaps being created.
+            let steep = false;
+            if( Math.abs( x0-x1 ) < Math.abs( y0-y1 ) ){
+                // Swop X & Y of each point
+                [ x0, y0 ] = [ y0, x0 ];
+                [ x1, y1 ] = [ y1, x1 ];
+                steep = true;
+            }
+            
+            // Make the Line draw from left to Right
+            if( x0 > x1 ){
+                [ x0, x1 ] = [ x1, x0 ];
+                [ y0, y1 ] = [ y1, y0 ];
+            }
+            
+            // Tutorial says the error value gives the distance to the best straight
+            // line from the current pixel coord in the loop. With the idea that if the
+            // error is greater then 1 pixel, we can move y to the next row.
+
+            const dx        = x1 - x0;
+            const dy        = y1 - y0;
+            const yStep     = ( y1 > y0 )? 1 : -1;
+            const errStep   = dx * 2;
+            const dErr      = Math.abs( dy ) * 2; // Dont understand this way of stepping the Y position
+            let   err       = 0;
+
+            y = y0;
+            for( x = x0; x <= x1; x++ ){
+                if( steep ) this.canvas.setPixel( y, x, color ); // de-transpose the cordinate
+                else        this.canvas.setPixel( x, y, color );
+
+                err += dErr; // Move some amount for every pixel on X axis
+
+                // console.log( 'x', x, 'y', y, 'err', err, 'dx', dx, 'derr', dErr, 'errStep', errStep );
+
+                // If the step amount is greater then the total X Range, it
+                // somehow means its time to move up 1 pixel in the Y axis.
+                // But the error step is to go twice the x range in the negative direction
+                if( err > dx ){
+                    y   += yStep;
+                    err -= errStep;
+                }
+            }
+            return this;
+        }
+
+        render(){
+            this.canvas.updatePixels();
+            return this
+        }
+    }
+
+    
+
+</script>
+</body>
+</html> 
