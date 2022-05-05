@@ -11,6 +11,6 @@
 		"browser-sync"  : "^2.27.5"
 	},
 	"scripts": {				
-		"bsyncRun"  : "browser-sync start --config bs-config.js"
+		"start"  : "browser-sync start --config bs-config.js"
 	}
 }

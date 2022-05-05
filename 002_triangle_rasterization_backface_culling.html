@@ -1,0 +1,437 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lesson 2: Triangle rasterization and back face culling</title></head><body>
+<link rel="stylesheet" href="./style.css"/>  
+<script type="module">
+import ObjParser    from './lib/ObjParser.js';
+import Canvas       from './lib/Canvas.js';
+
+window.addEventListener( 'load', async _=>{
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    const c = new Canvas();
+    c   .appendTo( document.body )
+        .setSize( 500, 500 )
+        .initPixel();
+
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    const r = new Renderer( c );
+
+    // Test_Basic( r );
+    // await Test_Lines( r );
+    // await Test_RandomColor( r );
+    await Test_Lighting( r );
+
+    r.render();
+});
+
+
+function Test_Basic( r ){
+    r.triangle( [10,70], [60,160], [70,80], 0x00ff00 );
+    r.triangle( [180,50], [150,1], [70,180], 0x00ffff );
+    r.triangle( [180,150], [120,160], [130,180], 0xffff00 );
+}
+
+async function Test_Lines( r ){
+    const obj = new ObjParser();
+    await obj.fetch( './assets/african_head.txt' );
+    obj.load();
+
+    let f, a, b, c;
+    let wh = r.canvas.width  / 2;   // Width Half
+    let hh = r.canvas.height / 2;  // Height Half
+
+    // Define Origin - Center of Image
+    const ox = Math.floor( wh );
+    const oy = Math.floor( hh );
+
+    const ap = [0,0];
+    const bp = [0,0];
+    const cp = [0,0];
+
+    for( f of obj.faces ){            
+        a  = obj.verts[ f[0] ];
+        b  = obj.verts[ f[1] ];
+        c  = obj.verts[ f[2] ];
+
+        ap[0] = ox + Math.floor(  a[0] * wh );
+        ap[1] = oy + Math.floor( -a[1] * hh ); // Invert Y
+        
+        bp[0] = ox + Math.floor(  b[0] * wh );
+        bp[1] = oy + Math.floor( -b[1] * hh ); // Invert Y
+        
+        cp[0] = ox + Math.floor(  c[0] * wh );
+        cp[1] = oy + Math.floor( -c[1] * hh ); // Invert Y
+
+        r.line( ap[0], ap[1], bp[0], bp[1], 0x00ffff );
+        r.line( bp[0], bp[1], cp[0], cp[1], 0x00ffff );
+        r.line( cp[0], cp[1], ap[0], ap[1], 0x00ffff );
+    }
+}
+
+async function Test_RandomColor( r ){
+    const obj = new ObjParser();
+    await obj.fetch( './assets/african_head.txt' );
+    obj.load();
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    let f, a, b, c;
+    let wh = r.canvas.width  / 2;   // Width Half
+    let hh = r.canvas.height / 2;  // Height Half
+
+    // Define Origin - Center of Image
+    const ox = Math.floor( wh );
+    const oy = Math.floor( hh );
+
+    const ap = [0,0];
+    const bp = [0,0];
+    const cp = [0,0];
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    for( f of obj.faces ){
+        // ----------------------------        
+        a  = obj.verts[ f[0] ];
+        b  = obj.verts[ f[1] ];
+        c  = obj.verts[ f[2] ];
+
+        // ----------------------------
+        // Convert to Screen Coordinates
+        ap[0] = ox + Math.floor(  a[0] * wh );
+        ap[1] = oy + Math.floor( -a[1] * hh ); // Invert Y
+        
+        bp[0] = ox + Math.floor(  b[0] * wh );
+        bp[1] = oy + Math.floor( -b[1] * hh ); // Invert Y
+        
+        cp[0] = ox + Math.floor(  c[0] * wh );
+        cp[1] = oy + Math.floor( -c[1] * hh ); // Invert Y
+
+        // ----------------------------
+        r.triangle( ap, bp, cp, Math.random() * 16744447 );
+    }
+}
+
+async function Test_Lighting( r ){
+    const obj = new ObjParser();
+    await obj.fetch( './assets/african_head.txt' );
+    obj.load();
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    let color, len, lit, f, a, b, c;
+    let wh = r.canvas.width  / 2;   // Width Half
+    let hh = r.canvas.height / 2;  // Height Half
+    let ax, ay, az, bx, by, bz;
+
+    // Define Origin - Center of Image
+    const ox = Math.floor( wh );
+    const oy = Math.floor( hh );
+
+    const ap = [0,0];
+    const bp = [0,0];
+    const cp = [0,0];
+    const n  = [0,0,0];
+
+    const lightDir = [0,0,-1];
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    for( f of obj.faces ){
+        // ----------------------------        
+        a  = obj.verts[ f[0] ];
+        b  = obj.verts[ f[1] ];
+        c  = obj.verts[ f[2] ];
+
+        // ----------------------------
+        // Convert to Screen Coordinates
+        ap[0] = ox + Math.floor(  a[0] * wh );
+        ap[1] = oy + Math.floor( -a[1] * hh ); // Invert Y
+        
+        bp[0] = ox + Math.floor(  b[0] * wh );
+        bp[1] = oy + Math.floor( -b[1] * hh ); // Invert Y
+        
+        cp[0] = ox + Math.floor(  c[0] * wh );
+        cp[1] = oy + Math.floor( -c[1] * hh ); // Invert Y
+
+        // ----------------------------
+        // Compute Triangle Normal
+        ax = c[0] - a[0];
+        ay = c[1] - a[1]; 
+        az = c[2] - a[2];
+        bx = b[0] - a[0]; 
+        by = b[1] - a[1]; 
+        bz = b[2] - a[2];
+        n[0] = ay * bz - az * by; // Cross Product
+        n[1] = az * bx - ax * bz;
+        n[2] = ax * by - ay * bx;
+        
+        // Normalize
+        len  = Math.sqrt( n[0]**2 + n[1]**2 + n[2]**2 );
+        n[0] /= len;
+        n[1] /= len;
+        n[2] /= len;
+
+        // ----------------------------
+        // dot( normal, lightDir );
+        lit =
+            n[ 0 ] * lightDir[ 0 ] +
+            n[ 1 ] * lightDir[ 1 ] +
+            n[ 2 ] * lightDir[ 2 ];
+        
+        // Negative means triangle facing opposite from light
+        // can ignore rendering this triangle, basiclly doing backface culling
+        if( lit < 0 ) continue;
+
+        // ----------------------------
+        color = Math.floor( lit * 255 );
+        color = ( color << 16 ) | ( color << 8 ) | color;
+
+        r.triangle( ap, bp, cp, color );
+    }
+}
+
+class Renderer{
+    // #region MAIN
+    constructor( canvas ){
+        this.canvas = canvas;
+    }
+    // #endregion
+
+    //////////////////////////////////////////////////////////////////////////
+    // The idea is to sort the 3 points of a triangle based on the Y position
+    // From there you can use a line sweeper to find the start/end position
+    // of each line from the two segments that the first sorted point is their origin.
+
+    // Example of an old line sweeper
+    triangleA( a, b, c, color ){
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // Sort vertices by the Y axis
+        if( a[1] > b[1] ) [ a, b ] = [ b, a ];
+        if( a[1] > c[1] ) [ a, c ] = [ c, a ];
+        if( b[1] > c[1] ) [ b, c ] = [ c, b ];
+
+        // console.log( a, b, c );
+        // this.line( a[0], a[1], b[0], b[1], 0x00ffff );
+        // this.line( b[0], b[1], c[0], c[1], 0x00ff00 );
+        // this.line( c[0], c[1], a[0], a[1], 0xff0000 );
+
+        const totalHeight = c[1] - a[1];
+        
+        let alpha, beta;
+        let x0, x1;
+
+        let segHeight   = b[1] - a[1] + 1;
+        for( let y=a[1]; y <= b[1]; y++ ){
+            alpha     = ( y - a[1] ) / totalHeight;
+            beta      = ( y - a[1] ) / segHeight; // be careful with divisions by zero
+
+            x0 = Math.floor( a[0] + ( c[0] - a[0] ) * alpha);
+            x1 = Math.floor( a[0] + ( b[0] - a[0] ) * beta );
+            
+            if( x0 > x1 ) [ x0, x1 ] = [ x1, x0 ];
+
+            // this.canvas.setPixel( x0, y, 0xffffff );
+            // this.canvas.setPixel( x1, y, 0xffffff );
+
+            for( let x = x0; x <= x1; x++ ){
+                this.canvas.setPixel( x, y, 0xffffff );
+            }
+        }
+
+        segHeight = c[1] - b[1] + 1;
+        for( let y=b[1]; y <= c[1]; y++ ){
+            alpha     = ( y - a[1] ) / totalHeight;
+            beta      = ( y - b[1] ) / segHeight; // be careful with divisions by zero
+
+            x0 = Math.floor( a[0] + ( c[0] - a[0] ) * alpha);
+            x1 = Math.floor( b[0] + ( c[0] - b[0] ) * beta );
+            
+            if( x0 > x1 ) [ x0, x1 ] = [ x1, x0 ];
+
+            // this.canvas.setPixel( x0, y, 0xffffff );
+            // this.canvas.setPixel( x1, y, 0xffffff );
+
+            for( let x = x0; x <= x1; x++ ){
+                this.canvas.setPixel( x, y, 0xffffff );
+            }
+        }
+
+    }
+
+    // Removing the double loops of the old line sweeper
+    triangleB( a, b, c, color ){
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // Sort vertices by the Y axis
+        if( a[1] > b[1] ) [ a, b ] = [ b, a ];
+        if( a[1] > c[1] ) [ a, c ] = [ c, a ];
+        if( b[1] > c[1] ) [ b, c ] = [ c, b ];
+
+        // console.log( a, b, c );
+        // this.line( a[0], a[1], b[0], b[1], 0x00ffff );
+        // this.line( b[0], b[1], c[0], c[1], 0x00ff00 );
+        // this.line( c[0], c[1], a[0], a[1], 0xff0000 );
+
+        const totalHeight = c[1] - a[1];
+        
+        let alpha, beta;
+        let x0, x1;
+        let segHeight   = b[1] - a[1] + 1;
+
+        let secondHalf = false;
+        for( let i=0; i < totalHeight; i++ ){
+            secondHalf  = ( i > ( b[1] - a[1] ) || b[1] == a[1] );
+            segHeight   = ( secondHalf )? c[1] - b[1] : b[1] - a[1]; 
+
+            alpha       = i / totalHeight;
+
+            // be careful: with above conditions no division by zero here
+            beta        = ( secondHalf )?
+                ( i - ( b[1] - a[1] ) ) / segHeight :
+                i / segHeight;
+
+            x0          =  Math.floor( a[0] + ( c[0] - a[0] ) * alpha );
+            x1          = ( secondHalf )?
+                Math.floor( b[0] + ( c[0] - b[0] ) * beta ) :
+                Math.floor( a[0] + ( b[0] - a[0] ) * beta );
+
+            if( x0 > x1 ) [ x0, x1 ] = [ x1, x0 ];
+
+            for( let x = x0; x <= x1; x++ ){
+                this.canvas.setPixel( x,  a[1] + i , 0xffffff );
+            }
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////////
+    // Second method is easier to understand. Find the bounding area of the triangle
+    // in screen space. Then you loop every pixel in the area testing if the pixel
+    // is part of the triangle using barycentric coordinates, which is a sort of
+    // 3 way lerp, the idea behind each of the 3 points have a weighted value.
+    
+    barycentric( a, b, c, p, out=[0,0,0] ){
+        const ax = c[0] - a[0];
+        const ay = b[0] - a[0]; 
+        const az = a[0] - p[0];
+        const bx = c[1] - a[1]; 
+        const by = b[1] - a[1]; 
+        const bz = a[1] - p[1];
+        const cx = ay * bz - az * by; // Cross Product
+        const cy = az * bx - ax * bz;
+        const cz = ax * by - ay * bx;
+
+        /* `pts` and `P` has integer value as coordinates
+        so `abs(u[2])` < 1 means `u[2]` is 0, that means
+        triangle is degenerate, in this case return something with negative coordinates */
+        if( Math.abs( cz ) < 1 ){
+            out[0] = -1;
+            out[1] = 1;
+            out[2] = 1;
+        }else{
+            out[0] = 1 - ( cx + cy ) / cz;
+            out[1] = cy / cz;
+            out[2] = cx / cz;
+        }
+
+        return out;
+    }
+
+    triangle( a, b, c, color=0xffffff ){
+        const bmin = [ this.canvas.width - 1, this.canvas.height - 1 ];
+        const bmax = [ 0, 0 ];
+
+        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // Compute Bounding box for triangle
+        const clamp = bmin.slice( 0 ); // Clone Max Bounding Point
+        bmin[0] = Math.max( 0,        Math.min( bmin[0], a[0] ) );
+        bmin[1] = Math.max( 0,        Math.min( bmin[1], a[1] ) );
+        bmax[0] = Math.min( clamp[0], Math.max( bmax[0], a[0] ) );
+        bmax[1] = Math.min( clamp[1], Math.max( bmax[1], a[1] ) );
+
+        bmin[0] = Math.max( 0,        Math.min( bmin[0], b[0] ) );
+        bmin[1] = Math.max( 0,        Math.min( bmin[1], b[1] ) );
+        bmax[0] = Math.min( clamp[0], Math.max( bmax[0], b[0] ) );
+        bmax[1] = Math.min( clamp[1], Math.max( bmax[1], b[1] ) );
+
+        bmin[0] = Math.max( 0,        Math.min( bmin[0], c[0] ) );
+        bmin[1] = Math.max( 0,        Math.min( bmin[1], c[1] ) );
+        bmax[0] = Math.min( clamp[0], Math.max( bmax[0], c[0] ) );
+        bmax[1] = Math.min( clamp[1], Math.max( bmax[1], c[1] ) );
+
+        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // Loop over all the pixels in the bounding area, then use
+        // barycentric coords to determine if the pixel is inside the triangle
+        const p     = [ bmin[0], 0 ];
+        const bary  = [ 0, 0, 0 ];
+        for( p[0]; p[0] <= bmax[0]; p[0]++ ){
+            for( p[1] = bmin[1]; p[1] <= bmax[1]; p[1]++ ){
+                this.barycentric( a, b, c, p, bary );
+                if( bary[0] < 0 || bary[1] < 0 ||  bary[2] < 0 ) continue;
+                this.canvas.setPixel( p[0],  p[1], color );
+            }
+        }
+    }
+
+
+    // #region PREVIOUS LESSON
+    line( x0, y0, x1, y1, color ){ 
+        let x = 0;
+        let y = 0;
+        let t, ti;
+
+        // If the line is steep, transpose the image.. not sure what this means.
+        // VoR Notes : Swapping X,Y can be a quick way to do a 90 degree rotation
+        // Drawing things out in a graph, if the line is very vertical, rotating it
+        // by 90 makes it more horizontal. This makes sense since we're trying to draw
+        // from left to right on the x axis. So if the line is mostly on the x axis
+        // it should draw better without gaps being created.
+        let steep = false;
+        if( Math.abs( x0-x1 ) < Math.abs( y0-y1 ) ){
+            // Swop X & Y of each point
+            [ x0, y0 ] = [ y0, x0 ];
+            [ x1, y1 ] = [ y1, x1 ];
+            steep = true;
+        }
+        
+        // Make the Line draw from left to Right
+        if( x0 > x1 ){
+            [ x0, x1 ] = [ x1, x0 ];
+            [ y0, y1 ] = [ y1, y0 ];
+        }
+        
+        // Tutorial says the error value gives the distance to the best straight
+        // line from the current pixel coord in the loop. With the idea that if the
+        // error is greater then 1 pixel, we can move y to the next row.
+
+        const dx        = x1 - x0;
+        const dy        = y1 - y0;
+        const yStep     = ( y1 > y0 )? 1 : -1;
+        const errStep   = dx * 2;
+        const dErr      = Math.abs( dy ) * 2; // Don't understand this way of stepping the Y position
+        let   err       = 0;
+
+        y = y0;
+        for( x = x0; x <= x1; x++ ){
+            if( steep ) this.canvas.setPixel( y, x, color ); // de-transpose the coordinate
+            else        this.canvas.setPixel( x, y, color );
+
+            err += dErr; // Move some amount for every pixel on X axis
+
+            // console.log( 'x', x, 'y', y, 'err', err, 'dx', dx, 'derr', dErr, 'errStep', errStep );
+
+            // If the step amount is greater then the total X Range, it
+            // somehow means its time to move up 1 pixel in the Y axis.
+            // But the error step is to go twice the x range in the negative direction
+            if( err > dx ){
+                y   += yStep;
+                err -= errStep;
+            }
+        }
+        return this;
+    }
+    
+    render(){
+        this.canvas.updatePixels();
+        return this
+    }
+    // #endregion
+}
+
+</script>
+</body>
+</html> 
